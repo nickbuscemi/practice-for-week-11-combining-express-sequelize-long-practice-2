@@ -24,6 +24,16 @@ router.get('/trees-insects', async (req, res, next) => {
 
     trees = await Tree.findAll({
         attributes: ['id', 'tree', 'location', 'heightFt'],
+        include: [
+            {
+                model: Insect,
+                attributes: ['id', 'name'],
+                through: { attributes: [] },
+                order: [['name', 'ASC']],
+                required: true,
+            }
+        ],
+        order: [['heightft', 'DESC']],
     });
 
     res.json(trees);
@@ -47,14 +57,29 @@ router.get('/insects-trees', async (req, res, next) => {
 
     const insects = await Insect.findAll({
         attributes: ['id', 'name', 'description'],
-        order: [ ['name'] ],
+        include: [
+            {
+                model: Tree,
+                attributes: ['id', 'tree'],
+                through: { attributes: [] },
+                order: [['tree', 'ASC']],
+            },
+        ],
+        order: [ ['name', 'ASC'] ],
     });
     for (let i = 0; i < insects.length; i++) {
         const insect = insects[i];
+        const foundTree = await insect.getTrees({
+            order: [['tree', 'ASC']]
+        })
         payload.push({
             id: insect.id,
             name: insect.name,
             description: insect.description,
+            trees: foundTree.map((tree) => ({
+                id: tree.id,
+                tree: tree.tree,
+            })),
         });
     }
 
@@ -89,6 +114,62 @@ router.get('/insects-trees', async (req, res, next) => {
  *   - (Any others you think of)
  */
 // Your code here
+router.post('/associate-tree-insect', async (req, res) => {
+    const { tree, insect } = req.body;
+
+    try {
+        // Check if tree ID is provided or create a new tree
+        let treeInstance;
+        if (tree.id) {
+            treeInstance = await Tree.findByPk(tree.id);
+        } else {
+            treeInstance = await Tree.create({
+                name: tree.name,
+                location: tree.location,
+                height: tree.height,
+                size: tree.size
+            });
+        }
+
+        // Check if insect ID is provided or create a new insect
+        let insectInstance;
+        if (insect.id) {
+            insectInstance = await Insect.findByPk(insect.id);
+        } else {
+            insectInstance = await Insect.create({
+                name: insect.name,
+                description: insect.description,
+                fact: insect.fact,
+                territory: insect.territory,
+                millimeters: insect.millimeters
+            });
+        }
+
+        // Try to associate tree with insect, but check if already associated
+        const alreadyAssociated = await treeInstance.hasInsect(insectInstance);
+        if (alreadyAssociated) {
+            return res.status(400).json({
+                status: 'error',
+                message: `Association already exists between ${treeInstance.tree} and ${insectInstance.name}`
+            });
+        }
+
+        await treeInstance.addInsect(insectInstance);
+
+        res.json({
+            status: 'success',
+            message: 'Successfully recorded information',
+            data: treeInstance // You can adjust what data you want to return here
+        });
+    } catch (error) {
+        res.status(500).json({
+            status: 'error',
+            message: 'Could not create association',
+            details: error.message
+        });
+    }
+});
+
 
 // Export class - DO NOT MODIFY
 module.exports = router;

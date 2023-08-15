@@ -7,6 +7,7 @@ const router = express.Router();
  */
 // Your code here
 const { Tree } = require('../db/models');
+const { Op } = require('sequelize');
 
 /**
  * INTERMEDIATE BONUS PHASE 1 (OPTIONAL), Step A:
@@ -242,10 +243,26 @@ router.put('/:id', async (req, res, next) => {
  *   - Ordered by the heightFt from tallest to shortest
  */
 router.get('/search/:value', async (req, res, next) => {
-    let trees = [];
+    try {
+        
+        const value = req.params.value;
 
+        //fetch trees similar to provided value
+        const trees = await Tree.findAll({
+            where: {
+                tree: {
+                    [Op.like]: `%${value}%`
+                }
+            },
+            attributes: ['id', 'tree', 'heightFt'],
+            order: [['heightFt', 'DESC']]
+        });
+    
 
-    res.json(trees);
+        res.json(trees);
+    } catch(error) {
+        next(error);
+    }
 });
 
 // Export class - DO NOT MODIFY
